@@ -8,7 +8,18 @@ import { historyRouter } from "./routes/history.routes.js";
 dotenv.config();
 
 export const app = express();
-app.use(cors({ origin: "http://localhost:5173" }));
+const allowed = new Set([
+    "http://localhost:5173",
+    process.env.CORS_ORIGIN,
+  ].filter(Boolean) as string[]);
+  
+  app.use(cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl/postman
+      cb(null, allowed.has(origin));
+    },
+}));
+  
 app.use(express.json());
 
 app.get("/health", (req, res) => res.json({ ok: true }));
