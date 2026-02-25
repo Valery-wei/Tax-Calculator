@@ -10,6 +10,7 @@ export const taxRouter = Router();
 taxRouter.post("/calculate", requireAuth, async (req: AuthedRequest, res) => {
   const parsed = calculateTaxSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
+  console.log("parsed tax input:", parsed.data);
 
   const result = calculateTax(parsed.data);
 

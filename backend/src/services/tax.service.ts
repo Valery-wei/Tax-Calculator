@@ -26,7 +26,7 @@ function calxResidentIncomeTax(taxableIncome: number): number {
 }
 
 function round2(n: number) {
-    return Math.round((n * Number.EPSILON) * 100) / 100;
+    return Math.round(n * 100) / 100;
 }
 
 export function calculateTax(input: CalculateTaxInput): CalculateTaxResult {
