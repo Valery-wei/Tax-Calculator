@@ -10,9 +10,25 @@ export const taxRouter = Router();
 taxRouter.post("/calculate", requireAuth, async (req: AuthedRequest, res) => {
   const parsed = calculateTaxSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message });
-  console.log("parsed tax input:", parsed.data);
 
   const result = calculateTax(parsed.data);
+
+  const taxYear = parsed.data.country === "CN" ? String(parsed.data.incomeYear) : parsed.data.taxYear;
+  const income = parsed.data.country === "CN" ? parsed.data.data.annualGrossIncome : parsed.data.income;
+  const deductions =
+    parsed.data.country === "CN"
+      ? [
+          { type: "specialDeductions", amount: parsed.data.data.specialDeductions },
+          { type: "otherDeductions", amount: parsed.data.data.otherDeductions },
+          { type: "infantCare", amount: parsed.data.data.infantCare },
+          { type: "childrenEducation", amount: parsed.data.data.childrenEducation },
+          { type: "continuingEducation", amount: parsed.data.data.continuingEducation },
+          { type: "seriousIllnessMedical", amount: parsed.data.data.seriousIllnessMedical },
+          { type: "housingLoanInterest", amount: parsed.data.data.housingLoanInterest },
+          { type: "housingRent", amount: parsed.data.data.housingRent },
+          { type: "elderlyCare", amount: parsed.data.data.elderlyCare },
+        ]
+      : parsed.data.deductions;
 
   const insert = await pool.query(
     `INSERT INTO tax_records(user_id, tax_year, income, deductions, result)
@@ -20,9 +36,9 @@ taxRouter.post("/calculate", requireAuth, async (req: AuthedRequest, res) => {
      RETURNING id`,
     [
       req.user!.userId,
-      parsed.data.taxYear,
-      parsed.data.income,
-      JSON.stringify(parsed.data.deductions),
+      taxYear,
+      income,
+      JSON.stringify(deductions),
       JSON.stringify(result),
     ]
   );

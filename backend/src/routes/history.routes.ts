@@ -24,6 +24,8 @@ historyRouter.get("/", requireAuth, async (req: AuthedRequest, res) => {
     createdAt: r.created_at,
     total: r.result?.total,
     taxableIncome: r.result?.taxableIncome,
+    country: r.result?.country ?? "AU",
+    currency: r.result?.currency ?? "AUD",
   }));
 
   return res.json(list);

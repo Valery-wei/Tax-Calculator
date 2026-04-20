@@ -5,11 +5,14 @@ import { apiFetch, clearToken } from "../api/client";
 import TaxCharts from "../component/TaxCharts";
 
 type Deduction = { type: string; amount: number };
+type CountryCode = "AU" | "CN";
 
 type IncomeMode = "annual" | "hourly";
 
 type FormValues = {
+  country: CountryCode;
   taxYear: string;
+  incomeYear: number;
   incomeMode: IncomeMode;
 
   // annual mode
@@ -21,15 +24,58 @@ type FormValues = {
   weeksPerYear: number;
 
   deductions: Deduction[];
+
+  annualGrossIncome: number;
+  specialDeductions: number;
+  otherDeductions: number;
+  infantCare: number;
+  childrenEducation: number;
+  continuingEducation: number;
+  seriousIllnessMedical: number;
+  housingLoanInterest: number;
+  housingRent: number;
+  elderlyCare: number;
 };
 
-type CalcResp = {
+type CalcRespAU = {
   recordId: string;
+  country: "AU";
+  currency: "AUD";
   taxableIncome: number;
   tax: number;
   medicareLevy: number;
   total: number;
 };
+
+type CalcRespCN = {
+  recordId: string;
+  country: "CN";
+  currency: "CNY";
+  grossIncome: number;
+  taxableIncome: number;
+  taxPayable: number;
+  netIncome: number;
+  appliedTaxRate: number;
+  quickDeduction: number;
+  deductionBreakdown: {
+    standardDeduction: number;
+    specialDeductions: number;
+    specialAdditionalDeductions: number;
+    otherDeductions: number;
+    items: {
+      infantCare: number;
+      childrenEducation: number;
+      continuingEducation: number;
+      seriousIllnessMedical: number;
+      housingLoanInterest: number;
+      housingRent: number;
+      elderlyCare: number;
+    };
+  };
+  total: number;
+};
+
+type CalcResp = CalcRespAU | CalcRespCN;
 
 export default function Calculator() {
   const nav = useNavigate();
@@ -40,13 +86,25 @@ export default function Calculator() {
 
   const defaultValues = useMemo<FormValues>(
     () => ({
+      country: "AU",
       taxYear: "2025-2026",
+      incomeYear: 2025,
       incomeMode: "annual",
       annualIncome: 0,
       hourlyRate: 40,
       hoursPerWeek: 38,
       weeksPerYear: 52,
       deductions: [{ type: "donation", amount: 0 }],
+      annualGrossIncome: 0,
+      specialDeductions: 0,
+      otherDeductions: 0,
+      infantCare: 0,
+      childrenEducation: 0,
+      continuingEducation: 0,
+      seriousIllnessMedical: 0,
+      housingLoanInterest: 0,
+      housingRent: 0,
+      elderlyCare: 0,
     }),
     []
   );
@@ -62,6 +120,7 @@ export default function Calculator() {
   });
 
   const incomeMode = watch("incomeMode");
+  const country = watch("country");
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -77,18 +136,49 @@ export default function Calculator() {
     setServerError(null);
     setResult(null);
 
-    const grossIncome = computeGrossIncome(values);
-    const deductionsTotal = (values.deductions ?? []).reduce((s, d) => s + Number(d.amount || 0), 0);
+    const grossIncome =
+      values.country === "CN" ? Number(values.annualGrossIncome || 0) : computeGrossIncome(values);
+    const deductionsTotal =
+      values.country === "CN"
+        ? Number(values.specialDeductions || 0) +
+          Number(values.otherDeductions || 0) +
+          Number(values.infantCare || 0) +
+          Number(values.childrenEducation || 0) +
+          Number(values.continuingEducation || 0) +
+          Number(values.seriousIllnessMedical || 0) +
+          Number(values.housingLoanInterest || 0) +
+          Number(values.housingRent || 0) +
+          Number(values.elderlyCare || 0)
+        : (values.deductions ?? []).reduce((s, d) => s + Number(d.amount || 0), 0);
 
     try {
-      const payload = {
-        taxYear: values.taxYear,
-        income: grossIncome,
-        deductions: values.deductions.map((d) => ({
-          type: d.type,
-          amount: Number(d.amount || 0),
-        })),
-      };
+      const payload =
+        values.country === "CN"
+          ? {
+              country: "CN" as const,
+              incomeYear: Number(values.incomeYear || 0),
+              data: {
+                annualGrossIncome: Number(values.annualGrossIncome || 0),
+                specialDeductions: Number(values.specialDeductions || 0),
+                otherDeductions: Number(values.otherDeductions || 0),
+                infantCare: Number(values.infantCare || 0),
+                childrenEducation: Number(values.childrenEducation || 0),
+                continuingEducation: Number(values.continuingEducation || 0),
+                seriousIllnessMedical: Number(values.seriousIllnessMedical || 0),
+                housingLoanInterest: Number(values.housingLoanInterest || 0),
+                housingRent: Number(values.housingRent || 0),
+                elderlyCare: Number(values.elderlyCare || 0),
+              },
+            }
+          : {
+              country: "AU" as const,
+              taxYear: values.taxYear,
+              income: grossIncome,
+              deductions: values.deductions.map((d) => ({
+                type: d.type,
+                amount: Number(d.amount || 0),
+              })),
+            };
 
       const data = await apiFetch("/api/tax/calculate", {
         method: "POST",
@@ -97,7 +187,7 @@ export default function Calculator() {
 
       setLastGrossIncome(grossIncome);
       setLastDeductionsTotal(deductionsTotal);
-      setResult(data);
+      setResult(data as CalcResp);
     } catch (e: any) {
       if ((e.message ?? "").toLowerCase().includes("token")) {
         clearToken();
@@ -135,150 +225,274 @@ export default function Calculator() {
             {/* Top row */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Tax year</label>
-                <input
+                <label className="block text-sm font-medium text-gray-700">Country</label>
+                <select
                   className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-                  {...register("taxYear", { required: true })}
-                />
-                {errors.taxYear && <p className="mt-1 text-sm text-red-600">Tax year required</p>}
+                  {...register("country")}
+                >
+                  <option value="AU">AU - Australia</option>
+                  <option value="CN">CN - China</option>
+                </select>
               </div>
 
-              {/* Income mode toggle */}
               <div>
-                <label className="block text-sm font-medium text-gray-700">Income mode</label>
-                <div className="mt-1 flex rounded-lg border p-1">
-                  <button
-                    type="button"
-                    className={`flex-1 rounded-md px-3 py-2 text-sm ${
-                      incomeMode === "annual" ? "bg-black text-white" : "text-gray-700"
-                    }`}
-                    onClick={() => {
-                      // setValue without importing: we use register + hidden? simplest is just use a normal select
-                      // But toggle feels nicer: we can rely on HTML by clicking a hidden radio
-                      (document.getElementById("mode-annual") as HTMLInputElement | null)?.click();
-                    }}
-                  >
-                    Annual
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 rounded-md px-3 py-2 text-sm ${
-                      incomeMode === "hourly" ? "bg-black text-white" : "text-gray-700"
-                    }`}
-                    onClick={() => {
-                      (document.getElementById("mode-hourly") as HTMLInputElement | null)?.click();
-                    }}
-                  >
-                    Hourly
-                  </button>
-                </div>
-
-                {/* real values stored via radios */}
-                <div className="hidden">
-                  <label>
-                    <input id="mode-annual" type="radio" value="annual" {...register("incomeMode")} />
-                    annual
-                  </label>
-                  <label>
-                    <input id="mode-hourly" type="radio" value="hourly" {...register("incomeMode")} />
-                    hourly
-                  </label>
-                </div>
+                <label className="block text-sm font-medium text-gray-700">
+                  {country === "CN" ? "Income year" : "Tax year"}
+                </label>
+                <input
+                  type={country === "CN" ? "number" : "text"}
+                  className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                  {...(country === "CN"
+                    ? register("incomeYear", { valueAsNumber: true, min: 1900, max: 3000 })
+                    : register("taxYear", { required: true }))}
+                />
+                {country === "CN" ? (
+                  errors.incomeYear && (
+                    <p className="mt-1 text-sm text-red-600">Income year should be a valid year</p>
+                  )
+                ) : (
+                  errors.taxYear && <p className="mt-1 text-sm text-red-600">Tax year required</p>
+                )}
               </div>
 
-              {/* Income inputs */}
-              {incomeMode === "annual" ? (
+              {country === "AU" ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Annual income</label>
+                  <label className="block text-sm font-medium text-gray-700">Income mode</label>
+                  <div className="mt-1 flex rounded-lg border p-1">
+                    <button
+                      type="button"
+                      className={`flex-1 rounded-md px-3 py-2 text-sm ${
+                        incomeMode === "annual" ? "bg-black text-white" : "text-gray-700"
+                      }`}
+                      onClick={() => {
+                        (document.getElementById("mode-annual") as HTMLInputElement | null)?.click();
+                      }}
+                    >
+                      Annual
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 rounded-md px-3 py-2 text-sm ${
+                        incomeMode === "hourly" ? "bg-black text-white" : "text-gray-700"
+                      }`}
+                      onClick={() => {
+                        (document.getElementById("mode-hourly") as HTMLInputElement | null)?.click();
+                      }}
+                    >
+                      Hourly
+                    </button>
+                  </div>
+
+                  <div className="hidden">
+                    <label>
+                      <input id="mode-annual" type="radio" value="annual" {...register("incomeMode")} />
+                      annual
+                    </label>
+                    <label>
+                      <input id="mode-hourly" type="radio" value="hourly" {...register("incomeMode")} />
+                      hourly
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Annual gross income (CNY)</label>
                   <input
                     type="number"
                     step="0.01"
                     className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-                    {...register("annualIncome", { valueAsNumber: true })}
+                    {...register("annualGrossIncome", { valueAsNumber: true })}
                   />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:col-span-1">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Hourly</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-                      {...register("hourlyRate", { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Hours/wk</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-                      {...register("hoursPerWeek", { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Weeks/yr</label>
-                    <input
-                      type="number"
-                      step="1"
-                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-                      {...register("weeksPerYear", { valueAsNumber: true })}
-                    />
-                  </div>
                 </div>
               )}
             </div>
 
-            {/* Deductions */}
-            <div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-sm font-semibold">Deductions</h2>
-                <button
-                  type="button"
-                  className="rounded-lg border px-3 py-1 text-sm"
-                  onClick={() => append({ type: "", amount: 0 })}
-                >
-                  + Add
-                </button>
-              </div>
-
-              <div className="mt-3 space-y-3">
-                {fields.map((f, idx) => (
-                  <div key={f.id} className="grid grid-cols-1 gap-3 sm:grid-cols-12">
-                    <div className="sm:col-span-7">
-                      <input
-                        className="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-                        placeholder="type (e.g. donation)"
-                        {...register(`deductions.${idx}.type` as const, { required: true })}
-                      />
-                      {errors.deductions?.[idx]?.type && (
-                        <p className="mt-1 text-sm text-red-600">Type required</p>
-                      )}
-                    </div>
-
-                    <div className="sm:col-span-4">
+            {country === "AU" ? (
+              <>
+                {/* Income inputs */}
+                {incomeMode === "annual" ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Annual income</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("annualIncome", { valueAsNumber: true })}
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Hourly</label>
                       <input
                         type="number"
                         step="0.01"
-                        className="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
-                        placeholder="amount"
-                        {...register(`deductions.${idx}.amount` as const, { valueAsNumber: true, min: 0 })}
+                        className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                        {...register("hourlyRate", { valueAsNumber: true })}
                       />
-                      {errors.deductions?.[idx]?.amount && (
-                        <p className="mt-1 text-sm text-red-600">Amount must be ≥ 0</p>
-                      )}
                     </div>
-
-                    <div className="sm:col-span-1 flex sm:justify-end">
-                      <button type="button" className="text-sm underline" onClick={() => remove(idx)}>
-                        Remove
-                      </button>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Hours/wk</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                        {...register("hoursPerWeek", { valueAsNumber: true })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Weeks/yr</label>
+                      <input
+                        type="number"
+                        step="1"
+                        className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                        {...register("weeksPerYear", { valueAsNumber: true })}
+                      />
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* Deductions */}
+                <div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 className="text-sm font-semibold">Deductions</h2>
+                    <button
+                      type="button"
+                      className="rounded-lg border px-3 py-1 text-sm"
+                      onClick={() => append({ type: "", amount: 0 })}
+                    >
+                      + Add
+                    </button>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    {fields.map((f, idx) => (
+                      <div key={f.id} className="grid grid-cols-1 gap-3 sm:grid-cols-12">
+                        <div className="sm:col-span-7">
+                          <input
+                            className="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                            placeholder="type (e.g. donation)"
+                            {...register(`deductions.${idx}.type` as const, { required: true })}
+                          />
+                          {errors.deductions?.[idx]?.type && (
+                            <p className="mt-1 text-sm text-red-600">Type required</p>
+                          )}
+                        </div>
+
+                        <div className="sm:col-span-4">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                            placeholder="amount"
+                            {...register(`deductions.${idx}.amount` as const, {
+                              valueAsNumber: true,
+                              min: 0,
+                            })}
+                          />
+                          {errors.deductions?.[idx]?.amount && (
+                            <p className="mt-1 text-sm text-red-600">Amount must be ≥ 0</p>
+                          )}
+                        </div>
+
+                        <div className="sm:col-span-1 flex sm:justify-end">
+                          <button type="button" className="text-sm underline" onClick={() => remove(idx)}>
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div>
+                <h2 className="text-sm font-semibold">China deductions (CNY)</h2>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Special deductions</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("specialDeductions", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Other deductions</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("otherDeductions", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Infant care</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("infantCare", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Children education</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("childrenEducation", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Continuing education</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("continuingEducation", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Serious illness medical</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("seriousIllnessMedical", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Housing loan interest</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("housingLoanInterest", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Housing rent</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("housingRent", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Elderly care</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="mt-1 w-full rounded-lg border px-3 py-2 outline-none focus:ring"
+                      {...register("elderlyCare", { valueAsNumber: true })}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             {serverError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -301,36 +515,94 @@ export default function Calculator() {
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow">
               <h2 className="text-sm font-semibold">Result</h2>
 
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
-                <div className="rounded-lg border p-3">
-                  <div className="text-gray-500">Taxable income</div>
-                  <div className="text-lg font-semibold">{result.taxableIncome}</div>
+              {result.country === "CN" ? (
+                <>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
+                    <div className="rounded-lg border p-3">
+                      <div className="text-gray-500">Gross income (CNY)</div>
+                      <div className="text-lg font-semibold">{result.grossIncome}</div>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <div className="text-gray-500">Taxable income (CNY)</div>
+                      <div className="text-lg font-semibold">{result.taxableIncome}</div>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <div className="text-gray-500">Tax payable (CNY)</div>
+                      <div className="text-lg font-semibold">{result.taxPayable}</div>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <div className="text-gray-500">Net income (CNY)</div>
+                      <div className="text-lg font-semibold">{result.netIncome}</div>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <div className="text-gray-500">Applied tax rate</div>
+                      <div className="text-lg font-semibold">{(result.appliedTaxRate * 100).toFixed(0)}%</div>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <div className="text-gray-500">Quick deduction (CNY)</div>
+                      <div className="text-lg font-semibold">{result.quickDeduction}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-lg border p-3 text-sm">
+                    <div className="font-medium">Deduction breakdown (CNY)</div>
+                    <div className="mt-2 text-gray-500">
+                      Standard: {result.deductionBreakdown.standardDeduction} | Special:{" "}
+                      {result.deductionBreakdown.specialDeductions} | Special additional:{" "}
+                      {result.deductionBreakdown.specialAdditionalDeductions} | Other:{" "}
+                      {result.deductionBreakdown.otherDeductions}
+                    </div>
+                    <div className="mt-2 text-gray-500">
+                      Infant care: {result.deductionBreakdown.items.infantCare} | Children education:{" "}
+                      {result.deductionBreakdown.items.childrenEducation} | Continuing education:{" "}
+                      {result.deductionBreakdown.items.continuingEducation} | Serious illness medical:{" "}
+                      {result.deductionBreakdown.items.seriousIllnessMedical}
+                    </div>
+                    <div className="mt-1 text-gray-500">
+                      Housing loan interest: {result.deductionBreakdown.items.housingLoanInterest} |
+                      Housing rent: {result.deductionBreakdown.items.housingRent} | Elderly care:{" "}
+                      {result.deductionBreakdown.items.elderlyCare}
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs text-gray-500">
+                    This calculator currently provides an estimate for Chinese resident salary income
+                    only and is for reference purposes.
+                  </div>
+                </>
+              ) : (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
+                  <div className="rounded-lg border p-3">
+                    <div className="text-gray-500">Taxable income</div>
+                    <div className="text-lg font-semibold">{result.taxableIncome}</div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-gray-500">Income tax</div>
+                    <div className="text-lg font-semibold">{result.tax}</div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-gray-500">Medicare levy</div>
+                    <div className="text-lg font-semibold">{result.medicareLevy}</div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-gray-500">Total</div>
+                    <div className="text-lg font-semibold">{result.total}</div>
+                  </div>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-gray-500">Income tax</div>
-                  <div className="text-lg font-semibold">{result.tax}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-gray-500">Medicare levy</div>
-                  <div className="text-lg font-semibold">{result.medicareLevy}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-gray-500">Total</div>
-                  <div className="text-lg font-semibold">{result.total}</div>
-                </div>
-              </div>
+              )}
 
               <div className="mt-3 text-xs text-gray-500">Saved record id: {result.recordId}</div>
             </div>
 
-            <TaxCharts
-              grossIncome={lastGrossIncome}
-              deductionsTotal={lastDeductionsTotal}
-              taxableIncome={result.taxableIncome}
-              tax={result.tax}
-              medicareLevy={result.medicareLevy}
-              total={result.total}
-            />
+            {result.country === "AU" && (
+              <TaxCharts
+                grossIncome={lastGrossIncome}
+                deductionsTotal={lastDeductionsTotal}
+                taxableIncome={result.taxableIncome}
+                tax={result.tax}
+                medicareLevy={result.medicareLevy}
+                total={result.total}
+              />
+            )}
           </div>
         )}
       </div>

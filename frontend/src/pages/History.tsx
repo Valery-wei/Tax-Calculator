@@ -9,6 +9,8 @@ type HistoryItem = {
   createdAt: string;
   total: number;
   taxableIncome: number;
+  country: "AU" | "CN";
+  currency: "AUD" | "CNY";
 };
 
 export default function History() {
@@ -64,12 +66,14 @@ export default function History() {
                 <div>
                   <div className="text-sm text-gray-500">{new Date(it.createdAt).toLocaleString()}</div>
                   <div className="mt-1 font-semibold">
-                    {it.taxYear} — income {it.income}
+                    {it.country} {it.taxYear} — income {it.income} {it.currency}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-gray-500">Total</div>
-                  <div className="text-lg font-semibold">{it.total}</div>
+                  <div className="text-lg font-semibold">
+                    {it.total} {it.currency}
+                  </div>
                 </div>
               </div>
 
