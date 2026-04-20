@@ -1,5 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:5050";
-
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export function getToken() {
   return localStorage.getItem("token");
@@ -11,6 +10,16 @@ export function setToken(token: string) {
 
 export function clearToken() {
   localStorage.removeItem("token");
+}
+
+function safeParseJson(text: string) {
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
@@ -26,10 +35,13 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   });
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  const data = safeParseJson(text);
 
   if (!res.ok) {
-    const msg = data?.message ?? `Request failed: ${res.status}`;
+    const msg =
+      data?.message ||
+      text ||
+      `Request failed: ${res.status}`;
     throw new Error(msg);
   }
 
