@@ -194,7 +194,7 @@ export default function Calculator() {
         nav("/login");
         return;
       }
-      setServerError(e.message ?? "Calculate failed");
+      setServerError(e.message ?? (values.country === "CN" ? "计算失败 / Calculate failed" : "Calculate failed"));
     }
   };
 
@@ -231,13 +231,13 @@ export default function Calculator() {
                   {...register("country")}
                 >
                   <option value="AU">AU - Australia</option>
-                  <option value="CN">CN - China</option>
+                  <option value="CN">CN - China 中国</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  {country === "CN" ? "Income year" : "Tax year"}
+                  {country === "CN" ? "Income year / 收入年度" : "Tax year"}
                 </label>
                 <input
                   type={country === "CN" ? "number" : "text"}
@@ -248,7 +248,7 @@ export default function Calculator() {
                 />
                 {country === "CN" ? (
                   errors.incomeYear && (
-                    <p className="mt-1 text-sm text-red-600">Income year should be a valid year</p>
+                    <p className="mt-1 text-sm text-red-600">Income year / 收入年度 must be valid</p>
                   )
                 ) : (
                   errors.taxYear && <p className="mt-1 text-sm text-red-600">Tax year required</p>
@@ -296,7 +296,9 @@ export default function Calculator() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Annual gross income (CNY)</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Annual gross income / 年度税前收入 (CNY)
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -407,10 +409,12 @@ export default function Calculator() {
               </>
             ) : (
               <div>
-                <h2 className="text-sm font-semibold">China deductions (CNY)</h2>
+                <h2 className="text-sm font-semibold">China deductions / 中国扣除项 (CNY)</h2>
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Special deductions</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Special deductions / 专项扣除
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -419,7 +423,7 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Other deductions</label>
+                    <label className="block text-sm font-medium text-gray-700">Other deductions / 其他扣除</label>
                     <input
                       type="number"
                       step="0.01"
@@ -428,7 +432,7 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Infant care</label>
+                    <label className="block text-sm font-medium text-gray-700">Infant care / 3岁以下婴幼儿照护</label>
                     <input
                       type="number"
                       step="0.01"
@@ -437,7 +441,9 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Children education</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Children education / 子女教育
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -446,7 +452,9 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Continuing education</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Continuing education / 继续教育
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -455,7 +463,9 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Serious illness medical</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Serious illness medical / 大病医疗
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -464,7 +474,9 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Housing loan interest</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Housing loan interest / 住房贷款利息
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -473,7 +485,7 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Housing rent</label>
+                    <label className="block text-sm font-medium text-gray-700">Housing rent / 住房租金</label>
                     <input
                       type="number"
                       step="0.01"
@@ -482,7 +494,7 @@ export default function Calculator() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Elderly care</label>
+                    <label className="block text-sm font-medium text-gray-700">Elderly care / 赡养老人</label>
                     <input
                       type="number"
                       step="0.01"
@@ -504,7 +516,13 @@ export default function Calculator() {
               disabled={isSubmitting}
               className="w-full rounded-lg bg-black px-4 py-2 text-white disabled:opacity-60"
             >
-              {isSubmitting ? "Calculating..." : "Calculate & Save"}
+              {country === "CN"
+                ? isSubmitting
+                  ? "计算中... / Calculating..."
+                  : "计算并保存 / Calculate & Save"
+                : isSubmitting
+                  ? "Calculating..."
+                  : "Calculate & Save"}
             </button>
           </div>
         </form>
@@ -513,60 +531,62 @@ export default function Calculator() {
         {result && (
           <div className="mt-6 space-y-4">
             <div className="rounded-2xl bg-white p-4 sm:p-6 shadow">
-              <h2 className="text-sm font-semibold">Result</h2>
+              <h2 className="text-sm font-semibold">{result.country === "CN" ? "结果 / Result" : "Result"}</h2>
 
               {result.country === "CN" ? (
                 <>
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
                     <div className="rounded-lg border p-3">
-                      <div className="text-gray-500">Gross income (CNY)</div>
+                      <div className="text-gray-500">Gross income / 税前收入 (CNY)</div>
                       <div className="text-lg font-semibold">{result.grossIncome}</div>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <div className="text-gray-500">Taxable income (CNY)</div>
+                      <div className="text-gray-500">Taxable income / 应纳税所得额 (CNY)</div>
                       <div className="text-lg font-semibold">{result.taxableIncome}</div>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <div className="text-gray-500">Tax payable (CNY)</div>
+                      <div className="text-gray-500">Tax payable / 应纳税额 (CNY)</div>
                       <div className="text-lg font-semibold">{result.taxPayable}</div>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <div className="text-gray-500">Net income (CNY)</div>
+                      <div className="text-gray-500">Net income / 税后收入 (CNY)</div>
                       <div className="text-lg font-semibold">{result.netIncome}</div>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <div className="text-gray-500">Applied tax rate</div>
+                      <div className="text-gray-500">Applied tax rate / 适用税率</div>
                       <div className="text-lg font-semibold">{(result.appliedTaxRate * 100).toFixed(0)}%</div>
                     </div>
                     <div className="rounded-lg border p-3">
-                      <div className="text-gray-500">Quick deduction (CNY)</div>
+                      <div className="text-gray-500">Quick deduction / 速算扣除数 (CNY)</div>
                       <div className="text-lg font-semibold">{result.quickDeduction}</div>
                     </div>
                   </div>
 
                   <div className="mt-3 rounded-lg border p-3 text-sm">
-                    <div className="font-medium">Deduction breakdown (CNY)</div>
+                    <div className="font-medium">Deduction breakdown / 扣除明细 (CNY)</div>
                     <div className="mt-2 text-gray-500">
-                      Standard: {result.deductionBreakdown.standardDeduction} | Special:{" "}
-                      {result.deductionBreakdown.specialDeductions} | Special additional:{" "}
-                      {result.deductionBreakdown.specialAdditionalDeductions} | Other:{" "}
+                      Standard 基础减除: {result.deductionBreakdown.standardDeduction} | Special 专项扣除:{" "}
+                      {result.deductionBreakdown.specialDeductions} | Special additional 专项附加扣除:{" "}
+                      {result.deductionBreakdown.specialAdditionalDeductions} | Other 其他扣除:{" "}
                       {result.deductionBreakdown.otherDeductions}
                     </div>
                     <div className="mt-2 text-gray-500">
-                      Infant care: {result.deductionBreakdown.items.infantCare} | Children education:{" "}
-                      {result.deductionBreakdown.items.childrenEducation} | Continuing education:{" "}
-                      {result.deductionBreakdown.items.continuingEducation} | Serious illness medical:{" "}
-                      {result.deductionBreakdown.items.seriousIllnessMedical}
+                      Infant care 婴幼儿照护: {result.deductionBreakdown.items.infantCare} | Children
+                      education 子女教育: {result.deductionBreakdown.items.childrenEducation} | Continuing
+                      education 继续教育: {result.deductionBreakdown.items.continuingEducation} | Serious
+                      illness medical 大病医疗: {result.deductionBreakdown.items.seriousIllnessMedical}
                     </div>
                     <div className="mt-1 text-gray-500">
-                      Housing loan interest: {result.deductionBreakdown.items.housingLoanInterest} |
-                      Housing rent: {result.deductionBreakdown.items.housingRent} | Elderly care:{" "}
+                      Housing loan interest 住房贷款利息: {result.deductionBreakdown.items.housingLoanInterest}
+                      | Housing rent 住房租金: {result.deductionBreakdown.items.housingRent} | Elderly care
+                      赡养老人:{" "}
                       {result.deductionBreakdown.items.elderlyCare}
                     </div>
                   </div>
                   <div className="mt-3 text-xs text-gray-500">
-                    This calculator currently provides an estimate for Chinese resident salary income
-                    only and is for reference purposes.
+                    本计算器当前仅对中国居民工资薪金所得提供估算结果，仅供参考。This calculator currently
+                    provides an estimate for Chinese resident salary income only and is for reference
+                    purposes.
                   </div>
                 </>
               ) : (
@@ -593,16 +613,15 @@ export default function Calculator() {
               <div className="mt-3 text-xs text-gray-500">Saved record id: {result.recordId}</div>
             </div>
 
-            {result.country === "AU" && (
-              <TaxCharts
-                grossIncome={lastGrossIncome}
-                deductionsTotal={lastDeductionsTotal}
-                taxableIncome={result.taxableIncome}
-                tax={result.tax}
-                medicareLevy={result.medicareLevy}
-                total={result.total}
-              />
-            )}
+            <TaxCharts
+              country={result.country}
+              grossIncome={lastGrossIncome}
+              deductionsTotal={lastDeductionsTotal}
+              taxableIncome={result.taxableIncome}
+              tax={result.country === "CN" ? result.taxPayable : result.tax}
+              medicareLevy={result.country === "CN" ? 0 : result.medicareLevy}
+              total={result.total}
+            />
           </div>
         )}
       </div>
